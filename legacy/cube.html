@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>Rikudo³ — 3D Rikudo on a cube</title>
+<style>
+  :root {
+    --bg: #0d0f14; --panel: rgba(20, 23, 31, 0.86); --line: rgba(255,255,255,0.09);
+    --text: #e8e6e1; --muted: #8d93a1; --accent: #f2c14e; --good: #7fd8a8; --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 40%, #1a1e29 0%, var(--bg) 70%); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  canvas#view { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(8px); padding: 14px 16px; }
+  #hud { top: 16px; left: 16px; width: 272px; }
+  h1 { margin: 0 0 2px; font-size: 20px; letter-spacing: 0.02em; }
+  h1 sup { color: var(--accent); }
+  h1 { display: flex; justify-content: space-between; align-items: baseline; }
+  h1 a { font-size: 12px; font-weight: 500; color: var(--muted); text-decoration: none; }
+  h1 a:hover { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .stats { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; margin: 6px 0 10px; }
+  .stats b { font-size: 18px; }
+  .pen { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px; }
+  .pen .lbl { color: var(--muted); font-size: 12px; flex: 1; }
+  .dir { display: flex; flex-direction: column; gap: 3px; }
+  .dir button { width: 30px; padding: 1px 0; font-weight: 700; font-size: 15px; line-height: 1.3; }
+  .pen .num { font-size: 26px; font-weight: 700; min-width: 40px; text-align: center; color: var(--accent); font-variant-numeric: tabular-nums; }
+  button, select { font: inherit; color: var(--text); background: rgba(255,255,255,0.06); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:hover, select:hover { background: rgba(255,255,255,0.12); }
+  button.primary { background: var(--accent); color: #1b1608; border-color: transparent; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.on { background: rgba(242,193,78,0.22); border-color: rgba(242,193,78,0.6); }
+  button.sm { padding: 3px 8px; }
+  select { padding: 6px 8px; }
+  select option { background: #1a1d26; }
+  label.tog { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; user-select: none; }
+  #views { bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 10px; display: flex; gap: 6px; align-items: center; }
+  #views span { color: var(--muted); font-size: 12px; margin-right: 4px; }
+  #help { bottom: 16px; right: 16px; width: 290px; font-size: 12px; color: var(--muted); }
+  #help b { color: var(--text); font-weight: 600; }
+  #help summary { cursor: pointer; color: var(--text); font-size: 13px; }
+  #help ul { padding-left: 16px; margin: 8px 0 0; }
+  #help li { margin: 3px 0; }
+  #toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 10px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #win { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; pointer-events: none; padding-bottom: 76px; }
+  #win .card { pointer-events: auto; text-align: center; background: var(--panel); border: 1px solid rgba(242,193,78,0.5);
+    border-radius: 16px; padding: 22px 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  #win h2 { margin: 0 0 6px; color: var(--accent); }
+  #busy { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.35);
+    font-size: 16px; }
+  @media (max-width: 760px) {
+    #hud { width: auto; right: 10px; left: 10px; top: 10px; padding: 10px 12px; }
+    #help { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud" class="panel">
+  <h1><span>Rikudo<sup>³</sup></span><a href="sphere.html">→ Sphere</a></h1>
+  <div class="meta" id="meta">—</div>
+  <div class="stats">
+    <div>Placed <b id="placed">0</b>/54</div>
+    <div>Time <b id="time">00:00</b></div>
+  </div>
+  <div class="pen">
+    <div class="dir">
+      <button id="dirPlus" class="on" title="Build forwards: 25 → 26 (key +)">+</button>
+      <button id="dirMinus" title="Build backwards: 25 → 24 (key −)">−</button>
+    </div>
+    <span class="lbl"><span id="penLbl">Next number</span><br/>(click an empty tile)</span>
+    <button class="sm" id="penDown" title="Lower unplaced number">‹</button>
+    <span class="num" id="penNum">2</span>
+    <button class="sm" id="penUp" title="Higher unplaced number">›</button>
+  </div>
+  <div class="row">
+    <select id="difficulty" title="Difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+      <option value="expert">Expert</option>
+    </select>
+    <button class="primary" id="newGame">New puzzle</button>
+  </div>
+  <div class="row" id="packRow" style="display:none">
+    <select id="pack" style="flex:1" title="Puzzle pack"></select>
+  </div>
+  <div class="row">
+    <button id="undo" title="Ctrl+Z">Undo</button>
+    <button id="hint">Hint</button>
+    <button id="restart">Restart</button>
+    <button id="eraser" title="Toggle eraser (E)">Eraser</button>
+  </div>
+  <div class="row">
+    <label class="tog"><input type="checkbox" id="mistakes" checked /> Show rule conflicts</label>
+  </div>
+  <div class="row">
+    <label class="tog"><input type="checkbox" id="spin" /> Idle spin</label>
+  </div>
+</div>
+
+<div id="views" class="panel">
+  <span>View</span>
+  <button class="sm" data-face="4">Front</button>
+  <button class="sm" data-face="0">Right</button>
+  <button class="sm" data-face="5">Back</button>
+  <button class="sm" data-face="1">Left</button>
+  <button class="sm" data-face="2">Top</button>
+  <button class="sm" data-face="3">Bottom</button>
+  <button class="sm" id="isoView">Corner</button>
+</div>
+
+<details id="help" class="panel" open>
+  <summary>How to play</summary>
+  <ul>
+    <li>Fill all 54 tiles with <b>1 → 54</b> so each number touches the next. Neighbours are the 4 tiles up/down/left/right, <b>including across cube edges</b>.</li>
+    <li><b>Gold chutes</b> link two tiles that must hold consecutive numbers. Once your path enters a chute, it has to go through.</li>
+    <li>There is exactly one solution.</li>
+    <li><b>Drag</b> to orbit. <b>Click an empty tile</b> to place the next number. <b>Click a number</b> to continue the chain from it.</li>
+    <li>Use <b>+ / −</b> to build the chain forwards or backwards: with − on, clicking 25 suggests 24.</li>
+    <li><b>Right-click</b> or <b>Shift-click</b> erases. With a tile selected, <b>type digits</b> to set it and use <b>arrow keys</b> to move.</li>
+  </ul>
+</details>
+
+<div id="toast"></div>
+<div id="busy">Generating a puzzle with a unique solution…</div>
+<div id="win"><div class="card">
+  <h2>Solved!</h2>
+  <div id="winText">All 54 linked.</div>
+  <div class="row" style="justify-content:center;margin-top:14px"><button class="primary" id="winNew">Next puzzle</button></div>
+</div></div>
+
+<script src="rikudo-core.js"></script>
+<!-- Optional puzzle pack made by `node generate.js`. Safe to delete. -->
+<script src="puzzles.js"></script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const C = window.RikudoCore;
+const { N, NODES, NEIGH, FACES } = C;
+const PACK = Array.isArray(window.RIKUDO_PUZZLES) ? window.RIKUDO_PUZZLES : [];
+
+// ---------------------------------------------------------------- state
+const S = {
+  puzzle: null,
+  values: new Array(N).fill(0),
+  locked: new Array(N).fill(false),   // givens + hints
+  hinted: new Array(N).fill(false),
+  chuteMap: Array.from({ length: N }, () => []),
+  undo: [],
+  pen: 2,
+  dir: 1,             // +1 build forwards, -1 build backwards
+  selected: -1,
+  hover: -1,
+  conflicts: new Set(),
+  showMistakes: true,
+  eraser: false,
+  solved: false,
+  elapsed: 0,          // ms accumulated
+  startedAt: 0,
+  typed: '', typeTimer: 0,
+};
+
+// ---------------------------------------------------------------- three.js setup
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const ISO = new THREE.Vector3(5.6, 4.6, 6.6);
+camera.position.copy(ISO);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = false;
+controls.minDistance = 6;
+controls.maxDistance = 18;
+controls.rotateSpeed = 0.8;
+controls.autoRotateSpeed = 1.2;
+
+const cubeGroup = new THREE.Group();
+scene.add(cubeGroup);
+const core = new THREE.Mesh(new THREE.BoxGeometry(2.985, 2.985, 2.985), new THREE.MeshBasicMaterial({ color: 0x0b0c10 }));
+cubeGroup.add(core);
+
+const TEX = 256;
+const tiles = NODES.map((node) => {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = TEX;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mat = new THREE.MeshBasicMaterial({ map: tex });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+  const f = FACES[node.face];
+  const u = new THREE.Vector3(...f.u), v = new THREE.Vector3(...f.v), n = new THREE.Vector3(...f.n);
+  mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u, v, n));
+  mesh.position.set(...node.pos).addScaledVector(n, 0.002);
+  mesh.userData.node = node.id;
+  cubeGroup.add(mesh);
+  return { cv, ctx: cv.getContext('2d'), tex, mesh };
+});
+const tileMeshes = tiles.map((t) => t.mesh);
+
+// ---------------------------------------------------------------- tile drawing
+const BODY = '#0b0c10';
+const FACE_TINT = [
+  'hsl(4, 42%, 30%)',    // R  red
+  'hsl(26, 52%, 31%)',   // L  orange
+  'hsl(222, 9%, 36%)',   // U  white/grey
+  'hsl(48, 48%, 29%)',   // D  yellow
+  'hsl(146, 34%, 25%)',  // F  green
+  'hsl(214, 44%, 31%)',  // B  blue
+];
+const SIDE_PT = { R: [TEX, TEX / 2], L: [0, TEX / 2], U: [TEX / 2, 0], D: [TEX / 2, TEX] };
+const pathColor = (k) => `hsl(${(190 - (k / (N - 1)) * 200 + 360) % 360}, 85%, 66%)`;
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+function drawTile(i) {
+  const { ctx, tex } = tiles[i];
+  const node = NODES[i];
+  const val = S.values[i];
+  const c = TEX / 2;
+  ctx.fillStyle = BODY;
+  ctx.fillRect(0, 0, TEX, TEX);
+  roundRect(ctx, 9, 9, TEX - 18, TEX - 18, 30);
+  ctx.fillStyle = FACE_TINT[node.face];
+  ctx.fill();
+  if (i === S.hover && !S.solved) { ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill(); }
+
+  // chutes (drawn as gold channels reaching to the shared border)
+  for (const w of S.chuteMap[i]) {
+    const [ex, ey] = SIDE_PT[C.sideOf(i, w)];
+    const sx = c + (ex - c) * 0.42, sy = c + (ey - c) * 0.42;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 46;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = '#f2c14e'; ctx.lineWidth = 34;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  }
+
+  // path links to consecutive neighbours
+  if (val) {
+    for (const w of NEIGH[i]) {
+      const vw = S.values[w];
+      if (!vw || Math.abs(vw - val) !== 1) continue;
+      const [ex, ey] = SIDE_PT[C.sideOf(i, w)];
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = pathColor(Math.min(val, vw));
+      ctx.lineWidth = 20;
+      ctx.beginPath(); ctx.moveTo(c, c); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+  }
+
+  const bad = S.showMistakes && S.conflicts.has(i);
+  const R = 74;
+  if (val) {
+    ctx.beginPath(); ctx.arc(c, c, R, 0, Math.PI * 2);
+    if (S.locked[i] && !S.hinted[i]) ctx.fillStyle = '#f4efe4';
+    else if (S.hinted[i]) ctx.fillStyle = '#9be7c4';
+    else ctx.fillStyle = 'rgba(8,10,14,0.82)';
+    ctx.fill();
+    if (!S.locked[i]) { ctx.lineWidth = 7; ctx.strokeStyle = pathColor(val - 0.5); ctx.stroke(); }
+    ctx.fillStyle = S.locked[i] ? '#15171c' : '#ffffff';
+    ctx.font = `${S.locked[i] ? 800 : 700} ${val >= 10 ? 92 : 104}px system-ui, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(val), c, c + 6);
+  } else if (i === S.hover && !S.eraser && !S.solved && S.pen >= 1) {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.font = `700 ${S.pen >= 10 ? 92 : 104}px system-ui, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(S.pen), c, c + 6);
+  }
+
+  if (bad || i === S.selected) {
+    roundRect(ctx, 14, 14, TEX - 28, TEX - 28, 26);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = bad ? '#ff6b6b' : 'rgba(255,255,255,0.9)';
+    ctx.stroke();
+  }
+  tex.needsUpdate = true;
+}
+const drawAll = () => { for (let i = 0; i < N; i++) drawTile(i); };
+
+// ---------------------------------------------------------------- game logic
+const $ = (id) => document.getElementById(id);
+const fmt = (ms) => { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+
+function placedSet() { const s = new Set(); S.values.forEach((v) => v && s.add(v)); return s; }
+// First unplaced number from `from` stepping by dir (±1); 0 if none.
+function nextUnplaced(from, dir = 1) {
+  const used = placedSet();
+  for (let k = from; k >= 1 && k <= N; k += dir) if (!used.has(k)) return k;
+  return 0;
+}
+function firstUnplaced() { return nextUnplaced(S.dir > 0 ? 1 : N, S.dir); }
+// Pen value after v in the current direction, wrapping to the start if that side is full.
+function penAfter(v) { return nextUnplaced(v + S.dir, S.dir) || firstUnplaced(); }
+function setDir(d) {
+  S.dir = d;
+  const v = S.selected >= 0 ? S.values[S.selected] : 0;
+  if (v) { const n = nextUnplaced(v + d, d); if (n) S.pen = n; }
+  refresh();
+}
+
+function loadPuzzle(p, restore = true) {
+  S.puzzle = p;
+  S.values = p.cells.slice();
+  S.locked = p.cells.map((v) => v > 0);
+  S.hinted = new Array(N).fill(false);
+  S.chuteMap = Array.from({ length: N }, () => []);
+  for (const [a, b] of p.chutes) { S.chuteMap[a].push(b); S.chuteMap[b].push(a); }
+  S.undo = []; S.selected = -1; S.solved = false; S.elapsed = 0; S.startedAt = performance.now();
+  if (restore) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('rikudo3d:save:' + p.id) || 'null');
+      if (saved) {
+        S.values = saved.values; S.hinted = saved.hinted;
+        S.locked = p.cells.map((v, i) => v > 0 || saved.hinted[i]);
+        S.elapsed = saved.elapsed || 0;
+      }
+    } catch (e) { /* storage unavailable */ }
+  }
+  try { localStorage.setItem('rikudo3d:last', JSON.stringify(p)); } catch (e) {}
+  S.pen = firstUnplaced();
+  const givens = p.cells.filter((v) => v).length;
+  $('meta').textContent = `${p.difficulty[0].toUpperCase() + p.difficulty.slice(1)} · ${givens} givens · ${p.chutes.length} chutes · #${p.id}`;
+  $('win').style.display = 'none';
+  controls.autoRotate = $('spin').checked;
+  if (PACK.length) $('pack').value = String(PACK.findIndex((x) => x.id === p.id));
+  refresh();
+  if (C.isSolved(S.values, p.chutes)) onSolved(true);
+}
+
+function save() {
+  if (!S.puzzle) return;
+  try {
+    localStorage.setItem('rikudo3d:save:' + S.puzzle.id, JSON.stringify({ values: S.values, hinted: S.hinted, elapsed: currentTime() }));
+  } catch (e) {}
+}
+
+function currentTime() { return S.solved ? S.elapsed : S.elapsed + (performance.now() - S.startedAt); }
+
+function refresh() {
+  S.conflicts = C.findConflicts(S.values, S.puzzle.chutes);
+  $('placed').textContent = S.values.filter((v) => v).length;
+  $('penNum').textContent = S.pen >= 1 ? S.pen : '✓';
+  $('penLbl').textContent = S.dir > 0 ? 'Next number' : 'Previous number';
+  $('dirPlus').classList.toggle('on', S.dir > 0);
+  $('dirMinus').classList.toggle('on', S.dir < 0);
+  $('eraser').classList.toggle('on', S.eraser);
+  drawAll();
+}
+
+// Apply a set of changes as one undoable step.
+function commit(changes) {
+  if (!changes.length) return;
+  S.undo.push(changes.map(([i]) => [i, S.values[i]]));
+  for (const [i, v] of changes) S.values[i] = v;
+  afterChange();
+}
+
+function afterChange() {
+  refresh();
+  save();
+  if (C.isSolved(S.values, S.puzzle.chutes)) onSolved(false);
+}
+
+function setValue(i, v) {
+  if (S.locked[i] || S.solved) return false;
+  const changes = [];
+  if (v) {
+    const other = S.values.indexOf(v);
+    if (other >= 0 && other !== i) {
+      if (S.locked[other]) { toast(`${v} is already given`); return false; }
+      changes.push([other, 0]);
+    }
+  }
+  changes.push([i, v]);
+  commit(changes);
+  return true;
+}
+
+function undo() {
+  const step = S.undo.pop();
+  if (!step || S.solved) return;
+  for (const [i, v] of step) S.values[i] = v;
+  afterChange();
+}
+
+function restart() {
+  if (!S.puzzle) return;
+  try { localStorage.removeItem('rikudo3d:save:' + S.puzzle.id); } catch (e) {}
+  loadPuzzle(S.puzzle, false);
+}
+
+function hint() {
+  if (S.solved) return;
+  const sol = S.puzzle.solution;
+  let cand = [];
+  for (let i = 0; i < N; i++) if (S.values[i] && S.values[i] !== sol[i]) cand.push(i);
+  if (!cand.length) {
+    // prefer an empty tile that continues the pen's chain
+    const near = S.values.indexOf(S.pen - S.dir);
+    const t = sol.indexOf(S.pen);
+    if (near >= 0 && t >= 0 && !S.values[t]) cand = [t];
+    else for (let i = 0; i < N; i++) if (!S.values[i]) cand.push(i);
+  }
+  if (!cand.length) return;
+  const i = cand[Math.floor(Math.random() * cand.length)];
+  const changes = [];
+  const other = S.values.indexOf(sol[i]);
+  if (other >= 0 && other !== i) changes.push([other, 0]);
+  changes.push([i, sol[i]]);
+  S.hinted[i] = true; S.locked[i] = true;
+  S.undo = S.undo.filter((step) => !step.some(([j]) => j === i));
+  for (const [j, v] of changes) S.values[j] = v;
+  S.pen = penAfter(sol[i]);
+  S.elapsed += 30000; // hint penalty
+  focusNode(i);
+  toast(`Hint: ${sol[i]} (+30s)`);
+  afterChange();
+}
+
+function onSolved(already) {
+  if (!already) S.elapsed = currentTime();
+  S.solved = true;
+  S.selected = -1;
+  const hints = S.hinted.filter(Boolean).length;
+  $('winText').textContent = `All 54 linked in ${fmt(S.elapsed)}${hints ? ` with ${hints} hint${hints > 1 ? 's' : ''}` : ''}.`;
+  $('win').style.display = 'flex';
+  controls.autoRotate = true;
+  save();
+  drawAll();
+}
+
+// ---------------------------------------------------------------- input
+function handleTile(i, erase) {
+  if (S.solved) return;
+  if (erase || S.eraser) {
+    if (!S.locked[i] && S.values[i]) setValue(i, 0);
+    S.selected = i;
+    refresh();
+    return;
+  }
+  const v = S.values[i];
+  if (v) {
+    // continue the chain from this number
+    S.selected = i;
+    const n = nextUnplaced(v + S.dir, S.dir);
+    if (n) S.pen = n;
+  } else if (S.pen >= 1) {
+    const placed = S.pen;
+    if (setValue(i, placed)) S.pen = penAfter(placed);
+    S.selected = i;
+  } else {
+    S.selected = i;
+  }
+  refresh();
+}
+
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+function pick(ev) {
+  const r = canvas.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(tileMeshes, false)[0];
+  return hit ? hit.object.userData.node : -1;
+}
+
+let down = null;
+canvas.addEventListener('pointerdown', (ev) => { down = { x: ev.clientX, y: ev.clientY, b: ev.button, t: performance.now() }; });
+canvas.addEventListener('pointerup', (ev) => {
+  if (!down) return;
+  const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
+  const b = down.b; down = null;
+  if (moved > 6) return;
+  const i = pick(ev);
+  if (i < 0) { S.selected = -1; refresh(); return; }
+  handleTile(i, b === 2 || ev.shiftKey);
+});
+canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+canvas.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType !== 'mouse') return;
+  const i = down ? -1 : pick(ev);
+  if (i !== S.hover) {
+    const prev = S.hover; S.hover = i;
+    if (prev >= 0) drawTile(prev);
+    if (i >= 0) drawTile(i);
+    canvas.style.cursor = i >= 0 ? 'pointer' : 'grab';
+  }
+});
+canvas.addEventListener('pointerleave', () => { const p = S.hover; S.hover = -1; if (p >= 0) drawTile(p); });
+
+window.addEventListener('keydown', (ev) => {
+  if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT') return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
+  if (ev.key === 'e' || ev.key === 'E') { S.eraser = !S.eraser; refresh(); return; }
+  if (ev.key === 'h' || ev.key === 'H') { hint(); return; }
+  if (ev.key === '+' || ev.key === '=') { setDir(1); return; }
+  if (ev.key === '-' || ev.key === '_') { setDir(-1); return; }
+  const i = S.selected;
+  if (ev.key === 'Escape') { S.selected = -1; S.eraser = false; refresh(); return; }
+  if (i < 0) return;
+  if (/^[0-9]$/.test(ev.key)) {
+    // buffer digits; commit as soon as the number can't grow, else after a short pause
+    clearTimeout(S.typeTimer);
+    let s = S.typed + ev.key;
+    if (+s > N || s.length > 2) s = ev.key;
+    S.typed = s;
+    const commitTyped = () => {
+      const v = +S.typed; S.typed = '';
+      if (v >= 1 && v <= N && setValue(i, v)) { S.pen = penAfter(v); refresh(); }
+    };
+    if (s.length === 2 || +s * 10 > N) commitTyped();
+    else { toast(`Typing ${s}…`); S.typeTimer = setTimeout(commitTyped, 700); }
+    return;
+  }
+  if (ev.key === 'Backspace' || ev.key === 'Delete') { ev.preventDefault(); setValue(i, 0); return; }
+  const dirs = { ArrowUp: 'U', ArrowDown: 'D', ArrowLeft: 'L', ArrowRight: 'R' };
+  if (dirs[ev.key]) {
+    ev.preventDefault();
+    const w = NEIGH[i].find((x) => C.sideOf(i, x) === dirs[ev.key]);
+    if (w != null) { S.selected = w; S.typed = ''; if (NODES[w].face !== NODES[i].face) focusNode(w); refresh(); }
+  }
+});
+
+// ---------------------------------------------------------------- camera moves
+let tween = null;
+function flyTo(dirVec) {
+  const dist = camera.position.length();
+  const to = dirVec.clone().normalize();
+  if (Math.abs(to.y) > 0.995) to.z += 0.02;
+  tween = { from: camera.position.clone().normalize(), to: to.normalize(), dist, t0: performance.now(), dur: 650 };
+}
+function focusNode(i) {
+  const n = new THREE.Vector3(...NODES[i].pos).normalize();
+  const f = new THREE.Vector3(...FACES[NODES[i].face].n);
+  flyTo(f.multiplyScalar(1.6).add(n)); // mostly face-on, tilted toward the tile
+}
+document.querySelectorAll('#views [data-face]').forEach((b) => {
+  b.addEventListener('click', () => {
+    const f = FACES[+b.dataset.face];
+    // face-on with a slight tilt so the neighbouring edges stay visible
+    const tilt = f.n[1] !== 0 ? new THREE.Vector3(0, 0, 0.3) : new THREE.Vector3(0, 0.3, 0);
+    flyTo(new THREE.Vector3(...f.n).add(tilt));
+  });
+});
+$('isoView').addEventListener('click', () => flyTo(ISO.clone()));
+
+// ---------------------------------------------------------------- buttons
+$('newGame').addEventListener('click', () => newPuzzle($('difficulty').value));
+$('winNew').addEventListener('click', () => {
+  if (PACK.length) {
+    const idx = PACK.findIndex((x) => x.id === S.puzzle.id);
+    if (idx >= 0 && idx + 1 < PACK.length) return loadPuzzle(PACK[idx + 1]);
+  }
+  newPuzzle(S.puzzle ? S.puzzle.difficulty : $('difficulty').value);
+});
+$('undo').addEventListener('click', undo);
+$('hint').addEventListener('click', hint);
+$('restart').addEventListener('click', restart);
+$('eraser').addEventListener('click', () => { S.eraser = !S.eraser; refresh(); });
+$('mistakes').addEventListener('change', (e) => { S.showMistakes = e.target.checked; drawAll(); });
+$('spin').addEventListener('change', (e) => { controls.autoRotate = e.target.checked || S.solved; });
+$('penUp').addEventListener('click', () => { const n = nextUnplaced((S.pen || 0) + 1, 1); if (n) S.pen = n; refresh(); });
+$('penDown').addEventListener('click', () => { const n = nextUnplaced((S.pen || N + 1) - 1, -1); if (n) S.pen = n; refresh(); });
+$('dirPlus').addEventListener('click', () => setDir(1));
+$('dirMinus').addEventListener('click', () => setDir(-1));
+
+if (PACK.length) {
+  $('packRow').style.display = 'flex';
+  const sel = $('pack');
+  sel.innerHTML = `<option value="-1">Puzzle pack (${PACK.length})…</option>` +
+    PACK.map((p, i) => `<option value="${i}">#${i + 1} · ${p.difficulty} · ${p.id}</option>`).join('');
+  sel.addEventListener('change', () => { const i = +sel.value; if (i >= 0) loadPuzzle(PACK[i]); });
+}
+
+function newPuzzle(difficulty) {
+  $('busy').style.display = 'flex';
+  setTimeout(() => {
+    try { loadPuzzle(C.generate({ difficulty })); }
+    catch (e) { console.error(e); toast('Generation failed — try again'); }
+    $('busy').style.display = 'none';
+  }, 40);
+}
+
+let toastTimer = 0;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ---------------------------------------------------------------- loop
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+let lastSec = -1;
+function frame(now) {
+  if (tween) {
+    const t = Math.min(1, (now - tween.t0) / tween.dur);
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const q = new THREE.Quaternion().setFromUnitVectors(tween.from, tween.to);
+    const qe = new THREE.Quaternion().slerp(q, e);
+    camera.position.copy(tween.from).applyQuaternion(qe).multiplyScalar(tween.dist);
+    if (t >= 1) tween = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  if (S.puzzle) {
+    const sec = Math.floor(currentTime() / 1000);
+    if (sec !== lastSec) { lastSec = sec; $('time').textContent = fmt(currentTime()); if (sec % 5 === 0) save(); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('beforeunload', save);
+
+// ---------------------------------------------------------------- start
+let start = null;
+try { start = JSON.parse(localStorage.getItem('rikudo3d:last') || 'null'); } catch (e) {}
+if (start && start.cells && start.solution) loadPuzzle(start);
+else if (PACK.length) loadPuzzle(PACK[0]);
+else newPuzzle('medium');
+
+// handy for debugging in the console
+window.rikudo = { state: S, load: loadPuzzle, generate: C.generate };
+</script>
+</body>
+</html>

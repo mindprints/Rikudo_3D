@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>Rikudo — Sphere</title>
+<style>
+  :root {
+    --bg: #0d0f14; --panel: rgba(20, 23, 31, 0.86); --line: rgba(255,255,255,0.09);
+    --text: #e8e6e1; --muted: #8d93a1; --accent: #f2c14e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: radial-gradient(ellipse at 50% 40%, #1a1e29 0%, var(--bg) 70%); color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  canvas#view { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    backdrop-filter: blur(8px); padding: 14px 16px; }
+  #hud { top: 16px; left: 16px; width: 286px; max-height: calc(100vh - 32px); overflow: auto; }
+  h1 { margin: 0 0 2px; font-size: 20px; letter-spacing: 0.02em; display: flex; justify-content: space-between; align-items: baseline; }
+  h1 a { font-size: 12px; font-weight: 500; color: var(--muted); text-decoration: none; }
+  h1 a:hover { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+  .stats { display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; margin: 6px 0 10px; }
+  .stats b { font-size: 18px; }
+  .pen { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px; }
+  .pen .lbl { color: var(--muted); font-size: 12px; flex: 1; }
+  .dir { display: flex; flex-direction: column; gap: 3px; }
+  .dir button { width: 30px; padding: 1px 0; font-weight: 700; font-size: 15px; line-height: 1.3; }
+  .pen .num { font-size: 26px; font-weight: 700; min-width: 40px; text-align: center; color: var(--accent); font-variant-numeric: tabular-nums; }
+  button, select { font: inherit; color: var(--text); background: rgba(255,255,255,0.06); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  button:hover, select:hover { background: rgba(255,255,255,0.12); }
+  button.primary { background: var(--accent); color: #1b1608; border-color: transparent; font-weight: 600; }
+  button.on { background: rgba(242,193,78,0.22); border-color: rgba(242,193,78,0.6); }
+  button.sm { padding: 3px 8px; }
+  select option { background: #1a1d26; }
+  label.tog { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; user-select: none; }
+  .sub { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 12px; }
+  #views { bottom: 16px; left: 50%; transform: translateX(-50%); padding: 8px 10px; display: flex; gap: 6px; align-items: center; }
+  #views span { color: var(--muted); font-size: 12px; margin-right: 4px; }
+  #help { bottom: 16px; right: 16px; width: 300px; font-size: 12px; color: var(--muted); }
+  #help b { color: var(--text); font-weight: 600; }
+  #help summary { cursor: pointer; color: var(--text); font-size: 13px; }
+  #help ul { padding-left: 16px; margin: 8px 0 0; }
+  #help li { margin: 3px 0; }
+  #toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); max-width: min(560px, 90vw); text-align: center; background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 10px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #win { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center; pointer-events: none; padding-bottom: 76px; }
+  #win .card { pointer-events: auto; text-align: center; background: var(--panel); border: 1px solid rgba(242,193,78,0.5);
+    border-radius: 16px; padding: 22px 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  #win h2 { margin: 0 0 6px; color: var(--accent); }
+  #issues { display: none; margin: 4px 0 8px; border-left: 3px solid #ff6b6b; background: rgba(255,107,107,0.08);
+    border-radius: 0 8px 8px 0; padding: 6px 8px; font-size: 12px; }
+  #issues .hd { color: #ffb3b3; font-weight: 600; margin-bottom: 2px; }
+  #issues div.it { cursor: pointer; padding: 2px 0; color: var(--text); }
+  #issues div.it:hover { color: #ffd0d0; text-decoration: underline; }
+  #issues .more { color: var(--muted); }
+  #busy { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); }
+  #busy .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px 22px; width: 320px; text-align: center; }
+  #busy .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); margin-top: 12px; overflow: hidden; }
+  #busy .bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .15s; }
+  @media (max-width: 760px) {
+    #hud { width: auto; right: 10px; left: 10px; top: 10px; padding: 10px 12px; max-height: 46vh; }
+    #help { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud" class="panel">
+  <h1><span>Rikudo <span style="color:var(--accent)">Sphere</span></span><a href="index.html">→ Cube</a></h1>
+  <div class="meta" id="meta">—</div>
+  <div class="stats">
+    <div>Placed <b id="placed">0</b>/<span id="total">72</span></div>
+    <div>Time <b id="time">00:00</b></div>
+  </div>
+  <div class="pen">
+    <div class="dir">
+      <button id="dirPlus" class="on" title="Build upwards (key +, or click the number you're building from again)">+</button>
+      <button id="dirMinus" title="Build downwards (key −, or click the number you're building from again)">−</button>
+    </div>
+    <span class="lbl"><span id="penLbl">Next number</span><br/>(click the number again to flip)</span>
+    <button class="sm" id="penDown" title="Lower unplaced number">‹</button>
+    <span class="num" id="penNum">2</span>
+    <button class="sm" id="penUp" title="Higher unplaced number">›</button>
+  </div>
+  <div class="row">
+    <button id="undo" title="Ctrl+Z">Undo</button>
+    <button id="hint" title="Hint (H): fixes a wrong number or reveals the next one, +30 s.&#10;Shift-click (Shift+H): peek at the full solution for 3 s, +60 s.">Hint</button>
+    <button id="restart">Restart</button>
+    <button id="eraser" title="Eraser (E). Shift-click (Shift+E): erase every number of yours that isn't on the solution path.">Eraser</button>
+  </div>
+  <div class="row">
+    <label class="tog"><input type="checkbox" id="mistakes" checked /> Show rule conflicts</label>
+  </div>
+  <div id="issues"></div>
+
+  <div class="sub">New puzzle</div>
+  <div class="row">
+    <select id="size" title="Board size">
+      <option value="42">42 cells</option>
+      <option value="72" selected>72 cells</option>
+      <option value="92">92 cells</option>
+    </select>
+    <select id="difficulty" title="Difficulty">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+      <option value="expert">Expert</option>
+    </select>
+  </div>
+  <div class="row">
+    <label class="tog" title="The 12 pentagons become blocked cells, like the blocked centre of a classic Rikudo grid"><input type="checkbox" id="holes" /> Block the 12 pentagons</label>
+  </div>
+  <div class="row">
+    <button class="primary" id="newGame">Generate</button>
+    <span id="sizeNote" style="color:var(--muted);font-size:12px"></span>
+  </div>
+  <div class="row" id="packRow" style="display:none">
+    <select id="pack" style="flex:1" title="Puzzle pack"></select>
+  </div>
+</div>
+
+<div id="views" class="panel">
+  <span>View</span>
+  <button class="sm" id="goEnd" title="Fly to the end of your chain (F)">Chain end</button>
+  <button class="sm" id="goOne">Find 1</button>
+  <button class="sm" id="goSel">Selected</button>
+  <button class="sm" id="resetView">Reset</button>
+  <label class="tog" style="margin-left:6px"><input type="checkbox" id="spin" /> Spin</label>
+</div>
+
+<details id="help" class="panel" open>
+  <summary>How to play</summary>
+  <ul>
+    <li>Fill every cell with <b>1 → N</b> so each number touches the next. Hexagons have 6 neighbours and the 12 <b>pentagons</b> have 5. You can also block the pentagons.</li>
+    <li>A <b>gold chute</b> bridging two cells means they hold consecutive numbers. Once the path enters a chute, it has to go through.</li>
+    <li><b>Engraved</b> numbers are given. There is exactly one solution.</li>
+    <li><b>Drag</b> to roll the sphere. <b>Click an empty cell</b> to place the pen number. <b>Click a number</b> to build on from it, and <b>click it again</b> to flip between building up (+) and down (−).</li>
+    <li><b>Red</b> means a number breaks a rule right now, and the <b>Rule check</b> box says which one. A number can also be wrong without breaking a rule yet.</li>
+    <li><b>Hint</b> checks against the solution. It fixes one wrong number of yours first. Otherwise it reveals the next number in your direction (+30 s). <b>Shift-click Hint</b> shows the solved sphere for 3 s (+60 s).</li>
+    <li><b>Shift-click Eraser</b> (Shift+E) clears every number of yours that isn't on the solution path.</li>
+    <li><b>Right-click</b> or <b>Shift-click</b> a cell to erase it. <b>Arrow keys</b> move the selection, and <b>F</b> flies to your chain end.</li>
+  </ul>
+</details>
+
+<div id="toast"></div>
+<div id="busy"><div class="card">
+  <div id="busyText">Generating a puzzle with a unique solution…</div>
+  <div class="bar"><i id="busyBar"></i></div>
+</div></div>
+<div id="win"><div class="card">
+  <h2>Solved!</h2>
+  <div id="winText"></div>
+  <div class="row" style="justify-content:center;margin-top:14px"><button class="primary" id="winNew">Next puzzle</button></div>
+</div></div>
+
+<script src="rikudo-core.js"></script>
+<!-- Optional pack from `node generate.js --board sphere -o puzzles-sphere`. Safe to delete. -->
+<script src="puzzles-sphere.js"></script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+
+const C = window.RikudoCore;
+const PACK = Array.isArray(window.RIKUDO_SPHERE_PUZZLES) ? window.RIKUDO_SPHERE_PUZZLES : [];
+const R = 2.4; // sphere radius
+const $ = (id) => document.getElementById(id);
+
+// ---------------------------------------------------------------- state
+const S = {
+  puzzle: null, board: null, eng: null, N: 0,
+  values: [], locked: [], hinted: [], chuteMap: [],
+  undo: [], pen: 2, dir: 1, selected: -1, hover: -1,
+  conflicts: new Set(), showMistakes: true, eraser: false, solved: false,
+  elapsed: 0, startedAt: 0, typed: '', typeTimer: 0,
+  issues: [], peek: false, peeks: 0, peekTimer: 0,
+};
+
+// ---------------------------------------------------------------- three.js setup
+const canvas = $('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+const HOME = new THREE.Vector3(0, 1.6, 9.2);
+camera.position.copy(HOME);
+scene.add(camera);
+scene.add(new THREE.HemisphereLight(0xe6ecff, 0x161820, 1.6));
+const key = new THREE.DirectionalLight(0xffffff, 1.6);
+key.position.set(3, 4, 6);
+camera.add(key); // light follows the viewer
+
+const controls = new TrackballControls(camera, canvas);
+controls.rotateSpeed = 3.2;
+controls.zoomSpeed = 0.8;
+controls.noPan = true;
+controls.dynamicDampingFactor = 0.12;
+controls.minDistance = 5.2;
+controls.maxDistance = 16;
+
+const world = new THREE.Group();
+scene.add(world);
+const base = new THREE.Mesh(new THREE.SphereGeometry(R * 0.985, 64, 48), new THREE.MeshStandardMaterial({ color: 0x07080b, roughness: 0.9 }));
+world.add(base);
+let boardGroup = null;     // cells + labels for the current board
+let pathGroup = null;      // path tubes (rebuilt on change)
+let chuteGroup = null;     // chute channels (rebuilt per puzzle)
+let cellViews = [];        // per playable index: { mesh, label, ctx, tex, center(Vector3), baseColor }
+
+const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+
+// Spherical fan polygon, subdivided so it hugs the sphere.
+function domedPolygon(center, corners, radius, segs = 4) {
+  const pos = [], idx = [];
+  const c = V(center);
+  for (let k = 0; k < corners.length; k++) {
+    const a = V(corners[k]), b = V(corners[(k + 1) % corners.length]);
+    const start = pos.length / 3, map = {};
+    for (let i = 0; i <= segs; i++) for (let j = 0; j <= segs - i; j++) {
+      const p = c.clone().multiplyScalar(segs - i - j).addScaledVector(a, i).addScaledVector(b, j).normalize().multiplyScalar(radius);
+      map[i + ',' + j] = pos.length / 3; pos.push(p.x, p.y, p.z);
+    }
+    for (let i = 0; i < segs; i++) for (let j = 0; j < segs - i; j++) {
+      idx.push(map[i + ',' + j], map[(i + 1) + ',' + j], map[i + ',' + (j + 1)]);
+      if (j < segs - i - 1) idx.push(map[(i + 1) + ',' + j], map[(i + 1) + ',' + (j + 1)], map[i + ',' + (j + 1)]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  // pillowed normals: blend sphere normal with the cell normal for a soft dome look
+  const nrm = [];
+  for (let i = 0; i < pos.length; i += 3) {
+    const p = new THREE.Vector3(pos[i], pos[i + 1], pos[i + 2]).normalize();
+    p.multiplyScalar(2.2).sub(c).normalize();
+    nrm.push(p.x, p.y, p.z);
+  }
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  return g;
+}
+
+function cellBaseColor(cell) {
+  const c = cell.center;
+  const h = ((Math.atan2(c[2], c[0]) / (2 * Math.PI)) * 360 + 360) % 360;
+  const l = 0.27 + 0.07 * c[1] + (cell.pent ? 0.1 : 0);
+  return new THREE.Color().setHSL(h / 360, cell.pent ? 0.22 : 0.34, l, THREE.SRGBColorSpace);
+}
+
+function disposeGroup(g) {
+  if (!g) return;
+  g.traverse((o) => { o.geometry?.dispose(); if (o.material) { o.material.map?.dispose(); o.material.dispose(); } });
+  world.remove(g);
+}
+
+let cellScale = 0.3;
+function buildBoard(board) {
+  disposeGroup(boardGroup);
+  boardGroup = new THREE.Group();
+  world.add(boardGroup);
+  cellViews = [];
+  // typical cell inradius (world units)
+  const c0 = board.cells[board.playable[0]];
+  const mids = c0.corners.map((q, k) => V(q).add(V(c0.corners[(k + 1) % c0.corners.length])).normalize());
+  cellScale = Math.min(...mids.map((m) => m.angleTo(V(c0.center)))) * R;
+
+  board.cells.forEach((cell) => {
+    const play = board.indexOf[cell.id];
+    const inset = cell.corners.map((q) => V(cell.center).lerp(V(q), play >= 0 ? 0.92 : 0.86).normalize().toArray());
+    if (play < 0) {
+      // hole: recessed dark cell
+      const m = new THREE.Mesh(domedPolygon(cell.center, inset, R * 0.975, 3),
+        new THREE.MeshStandardMaterial({ color: 0x0f1015, roughness: 1 }));
+      boardGroup.add(m);
+      return;
+    }
+    const baseColor = cellBaseColor(cell);
+    const mesh = new THREE.Mesh(domedPolygon(cell.center, inset, R, 4),
+      new THREE.MeshStandardMaterial({ color: baseColor.clone(), roughness: 0.62, metalness: 0.05 }));
+    mesh.userData.play = play;
+    boardGroup.add(mesh);
+
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 160;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const size = cellScale * 1.7;
+    const label = new THREE.Mesh(new THREE.PlaneGeometry(size, size),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+    label.position.copy(V(cell.center).multiplyScalar(R * 1.024));
+    label.renderOrder = 2;
+    boardGroup.add(label);
+    cellViews[play] = { mesh, label, ctx: cv.getContext('2d'), tex, center: V(cell.center), baseColor, cell };
+  });
+}
+
+// Great-circle arc between two unit vectors, from t0 to t1, at radius r.
+function arcCurve(a, b, r, t0 = 0, t1 = 1) {
+  const pts = [];
+  const q = new THREE.Quaternion().setFromUnitVectors(a, b);
+  const steps = 10;
+  for (let i = 0; i <= steps; i++) {
+    const t = t0 + ((t1 - t0) * i) / steps;
+    pts.push(a.clone().applyQuaternion(new THREE.Quaternion().slerp(q, t)).multiplyScalar(r));
+  }
+  return new THREE.CatmullRomCurve3(pts);
+}
+
+// Chutes: a gold bar bridging the two cells across their shared edge.
+function buildChutes() {
+  disposeGroup(chuteGroup);
+  chuteGroup = new THREE.Group();
+  world.add(chuteGroup);
+  const gold = new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.35, metalness: 0.4, emissive: 0x3a2a05 });
+  const w = cellScale * 0.15;
+  for (const [a, b] of S.puzzle.chutes) {
+    const curve = arcCurve(cellViews[a].center, cellViews[b].center, R * 1.001, 0.32, 0.68);
+    chuteGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 16, w, 10, false), gold));
+    for (const t of [0, 1]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(w, 12, 8), gold);
+      cap.position.copy(curve.getPoint(t));
+      chuteGroup.add(cap);
+    }
+  }
+}
+
+const pathColor = (k) => new THREE.Color().setHSL(((190 - (k / (S.N - 1)) * 200 + 360) % 360) / 360, 0.85, 0.66, THREE.SRGBColorSpace);
+const cssPathColor = (k) => `hsl(${(190 - (k / (S.N - 1)) * 200 + 360) % 360}, 85%, 66%)`;
+
+function buildPath() {
+  disposeGroup(pathGroup);
+  pathGroup = new THREE.Group();
+  world.add(pathGroup);
+  const pos = new Map();
+  displayValues().forEach((v, i) => v && pos.set(v, i));
+  const r = cellScale * 0.07;
+  for (const [v, i] of pos) {
+    const j = pos.get(v + 1);
+    if (j == null || !S.eng.isAdjacent(i, j)) continue;
+    // stop short of the centres so numbers stay legible; round the ends
+    const curve = arcCurve(cellViews[i].center, cellViews[j].center, R * 1.006, 0.24, 0.76);
+    const mat = new THREE.MeshStandardMaterial({ color: pathColor(v), roughness: 0.4, emissive: pathColor(v).multiplyScalar(0.25) });
+    pathGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 10, r, 8, false), mat));
+    for (const t of [0, 1]) {
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat);
+      cap.position.copy(curve.getPoint(t));
+      pathGroup.add(cap);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- cell drawing
+const displayValues = () => (S.peek ? S.puzzle.solution : S.values);
+
+// Engraved text, lit from above: the floor of the cut is a little darker than the
+// surface, the upper inner wall is in shadow and the lower inner wall catches the light.
+const scratch = document.createElement('canvas');
+function engrave(ctx, text, x, y, size, hinted) {
+  const W = ctx.canvas.width, H = ctx.canvas.height, d = Math.max(2.5, size * 0.065);
+  const font = `800 ${size}px system-ui, "Segoe UI", sans-serif`;
+  const glyph = (c, dy, color) => {
+    c.font = font; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = color; c.fillText(text, x, y + dy);
+  };
+  // band = glyph minus a shifted copy of itself, painted in `color`
+  const band = (dy, color) => {
+    scratch.width = W; scratch.height = H;
+    const b = scratch.getContext('2d');
+    b.fillStyle = color; b.fillRect(0, 0, W, H);
+    b.globalCompositeOperation = 'destination-out';
+    glyph(b, dy, '#000');
+    ctx.drawImage(scratch, 0, 0);
+  };
+  ctx.save();
+  glyph(ctx, 0, hinted ? 'rgba(170,240,205,0.92)' : 'rgba(238,233,222,0.9)');  // pale floor
+  ctx.globalCompositeOperation = 'source-atop';
+  band(d, hinted ? 'rgba(10,60,40,0.7)' : 'rgba(30,28,24,0.62)');             // shadowed upper wall
+  band(-d, 'rgba(255,255,255,0.95)');                                         // lit lower lip
+  ctx.restore();
+}
+
+function drawCell(i) {
+  const cv = cellViews[i];
+  if (!cv) return;
+  const { ctx, tex, mesh } = cv;
+  const T = 160, c = T / 2, Rd = 60;
+  const userVal = S.values[i];
+  const val = S.peek ? S.puzzle.solution[i] : userVal;
+  const bad = !S.peek && S.showMistakes && S.conflicts.has(i);
+  const peekWrong = S.peek && userVal && userVal !== val;
+
+  // cell colour
+  const col = cv.baseColor.clone();
+  if (bad) col.lerp(new THREE.Color(0xff4d4d), 0.45);
+  else if (peekWrong) col.lerp(new THREE.Color(0xff9a3c), 0.5);
+  else if (i === S.selected && !S.peek) col.lerp(new THREE.Color(0xffffff), 0.28);
+  else if (i === S.hover && !S.solved) col.lerp(new THREE.Color(0xffffff), 0.12);
+  mesh.material.color.copy(col);
+
+  ctx.clearRect(0, 0, T, T);
+  const fs = val >= 10 ? 70 : 82;
+  if (val && S.locked[i]) {
+    engrave(ctx, String(val), c, c + 4, fs, S.hinted[i]);
+  } else if (val && S.peek && userVal !== val) {
+    // solution preview for cells you haven't (correctly) filled
+    ctx.font = `700 ${fs - 6}px system-ui, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.strokeText(String(val), c, c + 4);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillText(String(val), c, c + 4);
+  } else if (val) {
+    ctx.beginPath(); ctx.arc(c, c, Rd, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(8,10,14,0.88)';
+    ctx.fill();
+    ctx.lineWidth = 6; ctx.strokeStyle = cssPathColor(val - 0.5); ctx.stroke();
+    if (bad) { ctx.lineWidth = 8; ctx.strokeStyle = '#ff6b6b'; ctx.stroke(); }
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${val >= 10 ? 64 : 74}px system-ui, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(val), c, c + 4);
+  } else if (i === S.hover && !S.eraser && !S.solved && S.pen >= 1) {
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = `700 ${S.pen >= 10 ? 64 : 74}px system-ui, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(S.pen), c, c + 4);
+  }
+  tex.needsUpdate = true;
+}
+const drawAll = () => { for (let i = 0; i < S.N; i++) drawCell(i); };
+
+// Keep every label upright relative to the viewer.
+const _up = new THREE.Vector3(), _right = new THREE.Vector3(), _m = new THREE.Matrix4();
+function orientLabels() {
+  // the camera's screen-up, expressed in the (possibly spinning) board's local frame
+  const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion)
+    .applyQuaternion(world.quaternion.clone().invert());
+  for (const cv of cellViews) {
+    if (!cv) continue;
+    const n = cv.center;
+    _up.copy(camUp).addScaledVector(n, -camUp.dot(n));
+    if (_up.lengthSq() < 1e-6) _up.set(0, 0, 1).addScaledVector(n, -n.z);
+    _up.normalize();
+    _right.crossVectors(_up, n);
+    _m.makeBasis(_right, _up, n);
+    cv.label.quaternion.setFromRotationMatrix(_m);
+  }
+}
+
+// ---------------------------------------------------------------- game logic
+const fmt = (ms) => { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+function placedSet() { const s = new Set(); S.values.forEach((v) => v && s.add(v)); return s; }
+function nextUnplaced(from, dir = 1) {
+  const used = placedSet();
+  for (let k = from; k >= 1 && k <= S.N; k += dir) if (!used.has(k)) return k;
+  return 0;
+}
+function firstUnplaced() { return nextUnplaced(S.dir > 0 ? 1 : S.N, S.dir); }
+function penAfter(v) { return nextUnplaced(v + S.dir, S.dir) || firstUnplaced(); }
+function setDir(d) {
+  S.dir = d;
+  const v = S.selected >= 0 ? S.values[S.selected] : 0;
+  if (v) { const n = nextUnplaced(v + d, d); if (n) S.pen = n; }
+  refresh(false);
+}
+
+function loadPuzzle(p, restore = true) {
+  const spec = p.board || { size: 72, holes: false };
+  const board = C.sphereBoard(spec.size, spec.holes);
+  const boardChanged = board !== S.board;
+  S.board = board; S.eng = board.engine; S.N = board.engine.N;
+  S.puzzle = p;
+  S.values = p.cells.slice();
+  S.locked = p.cells.map((v) => v > 0);
+  S.hinted = new Array(S.N).fill(false);
+  S.chuteMap = Array.from({ length: S.N }, () => []);
+  for (const [a, b] of p.chutes) { S.chuteMap[a].push(b); S.chuteMap[b].push(a); }
+  S.undo = []; S.selected = -1; S.hover = -1; S.solved = false; S.elapsed = 0; S.startedAt = performance.now();
+  clearTimeout(S.peekTimer); S.peek = false; S.peeks = 0;
+  if (restore) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('rikudo3d:save:' + p.id) || 'null');
+      if (saved && saved.values.length === S.N) {
+        S.values = saved.values; S.hinted = saved.hinted;
+        S.locked = p.cells.map((v, i) => v > 0 || saved.hinted[i]);
+        S.elapsed = saved.elapsed || 0;
+        S.peeks = saved.peeks || 0;
+      }
+    } catch (e) {}
+  }
+  try { localStorage.setItem('rikudo3d:sphere:last', JSON.stringify(p)); } catch (e) {}
+  if (boardChanged) buildBoard(board);
+  buildChutes();
+  S.pen = firstUnplaced();
+  $('total').textContent = S.N;
+  const d = p.difficulty[0].toUpperCase() + p.difficulty.slice(1);
+  $('meta').textContent = `${d} · ${spec.size}${spec.holes ? ' (pentagons blocked)' : ''} · ${p.cells.filter((v) => v).length} givens · ${p.chutes.length} chutes · #${p.id}`;
+  $('win').style.display = 'none';
+  if (PACK.length) $('pack').value = String(PACK.findIndex((x) => x.id === p.id));
+  refresh(true);
+  focusCell(S.values.indexOf(1));
+  if (S.eng.isSolved(S.values, p.chutes)) onSolved(true);
+}
+
+function save() {
+  if (!S.puzzle) return;
+  try { localStorage.setItem('rikudo3d:save:' + S.puzzle.id, JSON.stringify({ values: S.values, hinted: S.hinted, elapsed: currentTime(), peeks: S.peeks })); } catch (e) {}
+}
+function currentTime() { return S.solved ? S.elapsed : S.elapsed + (performance.now() - S.startedAt); }
+
+function refresh(pathChanged = true) {
+  S.issues = S.eng.explainConflicts(S.values, S.puzzle.chutes);
+  S.conflicts = new Set();
+  S.issues.forEach((x) => x.nodes.forEach((n) => S.conflicts.add(n)));
+  renderIssues();
+  $('placed').textContent = S.values.filter((v) => v).length;
+  $('penNum').textContent = S.pen >= 1 ? S.pen : '✓';
+  $('penLbl').textContent = S.dir > 0 ? 'Next number' : 'Previous number';
+  $('dirPlus').classList.toggle('on', S.dir > 0);
+  $('dirMinus').classList.toggle('on', S.dir < 0);
+  $('eraser').classList.toggle('on', S.eraser);
+  if (pathChanged) buildPath();
+  drawAll();
+}
+
+function renderIssues() {
+  const box = $('issues');
+  if (!S.showMistakes || !S.issues.length || S.peek) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const shown = S.issues.slice(0, 4);
+  box.innerHTML = `<div class="hd">Rule check (${S.issues.length})</div>` +
+    shown.map((x, k) => `<div class="it" data-k="${k}">${x.msg}</div>`).join('') +
+    (S.issues.length > shown.length ? `<div class="more">…and ${S.issues.length - shown.length} more</div>` : '');
+  box.style.display = 'block';
+  box.querySelectorAll('.it').forEach((el) => el.addEventListener('click', () => {
+    const n = shown[+el.dataset.k].nodes[0];
+    S.selected = n; focusCell(n); refresh(false);
+  }));
+}
+const issueFor = (i) => S.issues.find((x) => x.nodes.includes(i));
+
+function commit(changes) {
+  if (!changes.length) return;
+  S.undo.push(changes.map(([i]) => [i, S.values[i]]));
+  for (const [i, v] of changes) S.values[i] = v;
+  afterChange();
+}
+function afterChange() {
+  refresh(true);
+  save();
+  if (S.eng.isSolved(S.values, S.puzzle.chutes)) onSolved(false);
+}
+function setValue(i, v) {
+  if (S.locked[i] || S.solved) return false;
+  const changes = [];
+  if (v) {
+    const other = S.values.indexOf(v);
+    if (other >= 0 && other !== i) {
+      if (S.locked[other]) { toast(`${v} is already given`); return false; }
+      changes.push([other, 0]);
+    }
+  }
+  changes.push([i, v]);
+  commit(changes);
+  return true;
+}
+function undo() {
+  const step = S.undo.pop();
+  if (!step || S.solved) return;
+  for (const [i, v] of step) S.values[i] = v;
+  afterChange();
+}
+function restart() {
+  if (!S.puzzle) return;
+  try { localStorage.removeItem('rikudo3d:save:' + S.puzzle.id); } catch (e) {}
+  loadPuzzle(S.puzzle, false);
+}
+function hint() {
+  if (S.solved || S.peek) return;
+  const sol = S.puzzle.solution;
+  // 1) a wrong number of yours — prefer one that is already breaking a rule
+  let wrong = [];
+  for (let i = 0; i < S.N; i++) if (S.values[i] && S.values[i] !== sol[i]) wrong.push(i);
+  const redWrong = wrong.filter((i) => S.conflicts.has(i));
+  let i, msg;
+  if (wrong.length) {
+    const pool = redWrong.length ? redWrong : wrong;
+    i = pool[Math.floor(Math.random() * pool.length)];
+    const was = S.values[i];
+    msg = `Hint: ${was} doesn't belong here, this cell is ${sol[i]}.` +
+      (S.conflicts.has(i) ? '' : ` (${was} wasn't breaking a rule yet, but it's off the solution path.)`);
+  } else {
+    // 2) otherwise continue the chain in the current direction
+    let cand = [];
+    const near = S.values.indexOf(S.pen - S.dir);
+    const t = sol.indexOf(S.pen);
+    if (near >= 0 && t >= 0 && !S.values[t]) cand = [t];
+    else for (let k = 0; k < S.N; k++) if (!S.values[k]) cand.push(k);
+    if (!cand.length) return;
+    i = cand[Math.floor(Math.random() * cand.length)];
+    msg = `Hint: ${sol[i]} goes here.`;
+  }
+  const other = S.values.indexOf(sol[i]);
+  if (other >= 0 && other !== i) { S.values[other] = 0; msg += ` Your ${sol[i]} was on another cell, so it was removed there.`; }
+  S.values[i] = sol[i];
+  S.hinted[i] = true; S.locked[i] = true;
+  S.undo = S.undo.filter((step) => !step.some(([j]) => j === i));
+  S.pen = penAfter(sol[i]);
+  S.elapsed += 30000;
+  S.selected = i;
+  focusCell(i);
+  toast(msg + ' +30 s', 4500);
+  afterChange();
+}
+
+// Erase every placed number that differs from the solution (one undo step).
+function eraseIncorrect() {
+  if (S.solved || S.peek) return;
+  const sol = S.puzzle.solution;
+  const changes = [];
+  for (let i = 0; i < S.N; i++) if (!S.locked[i] && S.values[i] && S.values[i] !== sol[i]) changes.push([i, 0]);
+  if (!changes.length) { toast('Everything you\'ve placed is correct.'); return; }
+  commit(changes);
+  S.pen = firstUnplaced();
+  refresh(false);
+  toast(`Erased ${changes.length} incorrect number${changes.length > 1 ? 's' : ''}. Undo brings them back.`, 3000);
+}
+
+function peek() {
+  if (S.solved || S.peek) return;
+  S.peek = true; S.peeks++;
+  S.elapsed += 60000;
+  toast('Peeking at the solution… (+60 s)', 3000);
+  refresh(true);
+  S.peekTimer = setTimeout(() => { S.peek = false; refresh(true); }, 3000);
+  save();
+}
+
+function onSolved(already) {
+  if (!already) S.elapsed = currentTime();
+  S.solved = true; S.selected = -1;
+  const hints = S.hinted.filter(Boolean).length;
+  const extras = [hints && `${hints} hint${hints > 1 ? 's' : ''}`, S.peeks && `${S.peeks} peek${S.peeks > 1 ? 's' : ''}`].filter(Boolean);
+  $('winText').textContent = `All ${S.N} linked in ${fmt(S.elapsed)}${extras.length ? ' with ' + extras.join(' and ') : ''}.`;
+  $('win').style.display = 'flex';
+  spinning = true;
+  save();
+  drawAll();
+}
+
+// ---------------------------------------------------------------- input
+function handleCell(i, erase) {
+  if (S.solved || S.peek) return;
+  if (erase || S.eraser) {
+    S.selected = i;
+    if (!S.locked[i] && S.values[i]) setValue(i, 0); else refresh(false);
+    return;
+  }
+  const v = S.values[i];
+  if (v) {
+    const used = placedSet();
+    const open = (k) => k >= 1 && k <= S.N && !used.has(k);
+    if (i === S.selected) {
+      // clicking the number you're building from again flips the direction
+      const d = -S.dir;
+      S.dir = d;
+      const n = nextUnplaced(v + d, d);
+      if (n) { S.pen = n; toast(`${d > 0 ? 'Building up' : 'Building down'}: ${v} → ${n}`); }
+      else toast(`Nothing left to place ${d > 0 ? 'above' : 'below'} ${v}`);
+    } else {
+      S.selected = i;
+      // keep the current direction unless that side is already filled and the other isn't
+      let d = S.dir;
+      if (!open(v + d) && open(v - d)) d = -d;
+      S.dir = d;
+      const n = nextUnplaced(v + d, d);
+      if (n) S.pen = n;
+      const issue = S.showMistakes && issueFor(i);
+      if (issue) toast(issue.msg, 3500);
+    }
+    refresh(false);
+  } else {
+    S.selected = i;
+    if (S.pen >= 1 && setValue(i, S.pen)) S.pen = penAfter(S.values[i]);
+    refresh(false);
+  }
+}
+
+const ray = new THREE.Raycaster();
+const ptr = new THREE.Vector2();
+function pick(ev) {
+  const r = canvas.getBoundingClientRect();
+  ptr.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const hit = ray.intersectObjects(cellViews.filter(Boolean).map((c) => c.mesh).concat([base]), false)[0];
+  return hit && hit.object.userData.play != null ? hit.object.userData.play : -1;
+}
+let down = null;
+canvas.addEventListener('pointerdown', (ev) => { down = { x: ev.clientX, y: ev.clientY, b: ev.button }; spinning = false; tween = null; });
+canvas.addEventListener('pointerup', (ev) => {
+  if (!down) return;
+  const moved = Math.hypot(ev.clientX - down.x, ev.clientY - down.y);
+  const b = down.b; down = null;
+  if (moved > 6) return;
+  const i = pick(ev);
+  if (i < 0) { S.selected = -1; refresh(false); return; }
+  handleCell(i, b === 2 || ev.shiftKey);
+});
+canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+canvas.addEventListener('pointermove', (ev) => {
+  if (ev.pointerType !== 'mouse') return;
+  const i = down ? -1 : pick(ev);
+  if (i !== S.hover) {
+    const prev = S.hover; S.hover = i;
+    if (prev >= 0) drawCell(prev);
+    if (i >= 0) drawCell(i);
+    canvas.style.cursor = i >= 0 ? 'pointer' : 'grab';
+  }
+});
+canvas.addEventListener('pointerleave', () => { const p = S.hover; S.hover = -1; if (p >= 0) drawCell(p); });
+
+// neighbour whose on-screen direction best matches an arrow key
+function neighbourOnScreen(i, dx, dy) {
+  const toScreen = (v) => v.clone().multiplyScalar(R).applyMatrix4(world.matrixWorld).project(camera);
+  const p = toScreen(cellViews[i].center);
+  let best = -1, bestScore = 0.3;
+  for (const j of S.eng.NEIGH[i]) {
+    const q = toScreen(cellViews[j].center);
+    const d = new THREE.Vector2(q.x - p.x, q.y - p.y);
+    if (d.lengthSq() < 1e-8) continue;
+    const s = d.normalize().dot(new THREE.Vector2(dx, dy));
+    if (s > bestScore) { bestScore = s; best = j; }
+  }
+  return best;
+}
+
+window.addEventListener('keydown', (ev) => {
+  if (ev.target.tagName === 'SELECT' || ev.target.tagName === 'INPUT') return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.preventDefault(); undo(); return; }
+  if (ev.key === 'e' || ev.key === 'E') { if (ev.shiftKey) eraseIncorrect(); else { S.eraser = !S.eraser; refresh(false); } return; }
+  if (S.peek) return;
+  if (ev.key === 'h' || ev.key === 'H') { ev.shiftKey ? peek() : hint(); return; }
+  if (ev.key === 'f' || ev.key === 'F') { goChainEnd(); return; }
+  if (ev.key === '+' || ev.key === '=') { setDir(1); return; }
+  if (ev.key === '-' || ev.key === '_') { setDir(-1); return; }
+  if (ev.key === 'Escape') { S.selected = -1; S.eraser = false; refresh(false); return; }
+  const i = S.selected;
+  if (i < 0) return;
+  if (/^[0-9]$/.test(ev.key)) {
+    clearTimeout(S.typeTimer);
+    let s = S.typed + ev.key;
+    if (+s > S.N || s.length > 2) s = ev.key;
+    S.typed = s;
+    const commitTyped = () => {
+      const v = +S.typed; S.typed = '';
+      if (v >= 1 && v <= S.N && setValue(i, v)) { S.pen = penAfter(v); refresh(false); }
+    };
+    if (s.length === 2 || +s * 10 > S.N) commitTyped();
+    else { toast(`Typing ${s}…`); S.typeTimer = setTimeout(commitTyped, 700); }
+    return;
+  }
+  if (ev.key === 'Backspace' || ev.key === 'Delete') { ev.preventDefault(); setValue(i, 0); return; }
+  const dirs = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+  if (dirs[ev.key]) {
+    ev.preventDefault();
+    const w = neighbourOnScreen(i, ...dirs[ev.key]);
+    if (w >= 0) { S.selected = w; S.typed = ''; ensureVisible(w); refresh(false); }
+  }
+});
+
+// ---------------------------------------------------------------- camera moves
+let tween = null, spinning = false;
+function flyTo(dir) {
+  const to = dir.clone().normalize();
+  tween = { from: camera.position.clone().normalize(), to, dist: camera.position.length(), upFrom: camera.up.clone(), t0: performance.now(), dur: 700 };
+}
+function focusCell(i) {
+  if (i < 0 || !cellViews[i]) return;
+  flyTo(cellViews[i].center.clone().applyQuaternion(world.quaternion));
+}
+function ensureVisible(i) {
+  const n = cellViews[i].center.clone().applyQuaternion(world.quaternion);
+  if (n.dot(camera.position.clone().normalize()) < 0.55) focusCell(i);
+}
+function goChainEnd() {
+  // the cell the pen continues from, else the last placed number in pen direction
+  let i = S.values.indexOf(S.pen - S.dir);
+  if (i < 0) i = S.selected;
+  if (i < 0) i = S.values.indexOf(1);
+  focusCell(i);
+}
+$('goEnd').addEventListener('click', goChainEnd);
+$('goOne').addEventListener('click', () => focusCell(S.values.indexOf(1)));
+$('goSel').addEventListener('click', () => focusCell(S.selected));
+$('resetView').addEventListener('click', () => { camera.up.set(0, 1, 0); flyTo(HOME.clone()); });
+$('spin').addEventListener('change', (e) => { spinning = e.target.checked; });
+
+// ---------------------------------------------------------------- buttons & generation
+$('undo').addEventListener('click', undo);
+$('hint').addEventListener('click', (ev) => (ev.shiftKey ? peek() : hint()));
+$('restart').addEventListener('click', restart);
+$('eraser').addEventListener('click', (ev) => { if (ev.shiftKey) eraseIncorrect(); else { S.eraser = !S.eraser; refresh(false); } });
+$('mistakes').addEventListener('change', (e) => { S.showMistakes = e.target.checked; renderIssues(); drawAll(); });
+$('penUp').addEventListener('click', () => { const n = nextUnplaced((S.pen || 0) + 1, 1); if (n) S.pen = n; refresh(false); });
+$('penDown').addEventListener('click', () => { const n = nextUnplaced((S.pen || S.N + 1) - 1, -1); if (n) S.pen = n; refresh(false); });
+$('dirPlus').addEventListener('click', () => setDir(1));
+$('dirMinus').addEventListener('click', () => setDir(-1));
+const updateSizeNote = () => {
+  const s = +$('size').value, h = $('holes').checked;
+  $('sizeNote').textContent = `numbers 1–${h ? s - 12 : s}`;
+};
+$('size').addEventListener('change', updateSizeNote);
+$('holes').addEventListener('change', updateSizeNote);
+updateSizeNote();
+$('newGame').addEventListener('click', () => newPuzzle({ size: +$('size').value, holes: $('holes').checked, difficulty: $('difficulty').value }));
+$('winNew').addEventListener('click', () => {
+  if (PACK.length) {
+    const idx = PACK.findIndex((x) => x.id === S.puzzle.id);
+    if (idx >= 0 && idx + 1 < PACK.length) return loadPuzzle(PACK[idx + 1]);
+  }
+  const b = S.puzzle.board;
+  newPuzzle({ size: b.size, holes: b.holes, difficulty: S.puzzle.difficulty });
+});
+
+if (PACK.length) {
+  $('packRow').style.display = 'flex';
+  const sel = $('pack');
+  sel.innerHTML = `<option value="-1">Puzzle pack (${PACK.length})…</option>` +
+    PACK.map((p, i) => `<option value="${i}">#${i + 1} · ${p.board.size}${p.board.holes ? 'h' : ''} · ${p.difficulty}</option>`).join('');
+  sel.addEventListener('change', () => { const i = +sel.value; if (i >= 0) loadPuzzle(PACK[i]); });
+}
+
+// Generation runs in a Web Worker built from the core's own source, so it works from file:// too.
+let worker = null;
+function getWorker() {
+  if (worker) return worker;
+  try {
+    const src = `const RikudoCore = ${C.__source};
+      onmessage = (e) => {
+        let last = 0;
+        try {
+          const p = RikudoCore.generateSphere(Object.assign({}, e.data, { onProgress: (f) => {
+            const now = Date.now(); if (now - last > 80) { last = now; postMessage({ progress: f }); } } }));
+          postMessage({ puzzle: p });
+        } catch (err) { postMessage({ error: String(err) }); }
+      };`;
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  } catch (e) { worker = null; }
+  return worker;
+}
+function newPuzzle(opts) {
+  $('busy').style.display = 'flex';
+  $('busyBar').style.width = '0%';
+  $('busyText').textContent = `Generating a ${opts.size}-cell ${opts.difficulty} puzzle with a unique solution…`;
+  const done = (p) => { $('busy').style.display = 'none'; if (p) loadPuzzle(p); };
+  const w = getWorker();
+  if (w) {
+    w.onmessage = (e) => {
+      if (e.data.progress != null) $('busyBar').style.width = Math.round(e.data.progress * 100) + '%';
+      else if (e.data.puzzle) done(e.data.puzzle);
+      else { console.error(e.data.error); toast('Generation failed — try again'); done(null); }
+    };
+    w.onerror = (e) => { console.warn('worker failed, generating on main thread', e); worker = null; mainThread(); };
+    w.postMessage(opts);
+  } else mainThread();
+  function mainThread() {
+    setTimeout(() => {
+      try { done(C.generateSphere(opts)); } catch (e) { console.error(e); toast('Generation failed — try again'); done(null); }
+    }, 40);
+  }
+}
+
+let toastTimer = 0;
+function toast(msg, ms = 1800) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------------------------------------------------------------- loop
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  controls.handleResize();
+}
+window.addEventListener('resize', resize);
+resize();
+
+let lastSec = -1, lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (tween) {
+    const t = Math.min(1, (now - tween.t0) / tween.dur);
+    const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const q = new THREE.Quaternion().setFromUnitVectors(tween.from, tween.to);
+    const qe = new THREE.Quaternion().slerp(q, e);
+    camera.position.copy(tween.from).applyQuaternion(qe).multiplyScalar(tween.dist);
+    camera.up.copy(tween.upFrom).applyQuaternion(qe);
+    camera.lookAt(0, 0, 0);
+    if (t >= 1) tween = null;
+  }
+  if (spinning) world.rotateOnWorldAxis(camera.up.clone().normalize(), dt * 0.35);
+  controls.update();
+  orientLabels();
+  renderer.render(scene, camera);
+  if (S.puzzle) {
+    const sec = Math.floor(currentTime() / 1000);
+    if (sec !== lastSec) { lastSec = sec; $('time').textContent = fmt(currentTime()); if (sec % 5 === 0) save(); }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+window.addEventListener('beforeunload', save);
+
+// ---------------------------------------------------------------- start
+let start = null;
+try { start = JSON.parse(localStorage.getItem('rikudo3d:sphere:last') || 'null'); } catch (e) {}
+if (start && start.cells && start.solution && start.board) loadPuzzle(start);
+else if (PACK.length) loadPuzzle(PACK[0]);
+else newPuzzle({ size: 72, holes: false, difficulty: 'medium' });
+
+window.rikudo = { state: S, load: loadPuzzle, camera, world, get cellViews() { return cellViews; } };
+</script>
+</body>
+</html>

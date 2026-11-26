@@ -122,7 +122,8 @@ Cell ids index the playable cells of `RikudoCore.boardFor(board)`. On the sphere
 ## Files
 
 - `index.html`: the game, with all three boards.
-- `science.html`: "The science behind Rikudo³", the maths of one-solution puzzles (linked from *How to play*). Formulas use KaTeX from the CDN.
+- `science-content.js`: the article "The science behind Rikudo³" (text, diagrams, formulas). The game shows it on the pause screen, and `science.html` shows it as a page of its own. Edit it here and both update. Formulas use KaTeX from the CDN.
+- `science.html`: the article as a standalone page (linked from *How to play*, the win screen and the tutorial).
 - `rikudo-core.js`: boards, solver and generator (browser and Node).
 - `generate.js`: the CLI pack generator.
 - `puzzles*.js` and `puzzles*.json`: puzzle packs.

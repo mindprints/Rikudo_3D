@@ -90,6 +90,33 @@
   #winStep { display: none; margin: 14px auto 0; max-width: 460px; padding: 10px 14px; border: 1px solid rgba(95,212,224,0.45); border-radius: 12px; background: rgba(95,212,224,0.07); }
   #winStep p { margin: 0 0 8px; font-size: 13.5px; color: var(--text); }
   #winStep b { color: #9fe8f0; }
+  .bpHd { margin: 16px 0 8px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .bpRow { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .bpick { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 128px; padding: 10px 8px 9px; border-radius: 14px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--line); cursor: pointer; color: var(--text); transition: transform .12s, border-color .12s, background .12s; }
+  .bpick:hover { transform: translateY(-2px); border-color: rgba(242,193,78,0.6); background: rgba(242,193,78,0.08); }
+  .bpick svg { width: 52px; height: 52px; margin-bottom: 4px; }
+  .bpick b { font-size: 14px; }
+  .bpick small { font-size: 11px; color: var(--muted); line-height: 1.25; text-align: center; }
+  .bpick.cur { border-color: rgba(242,193,78,0.45); }
+  .bpick.cur small { color: var(--accent); }
+  #win .winBoards .bpHd { margin-top: 18px; }
+  .tut-side .bpRow, #win .bpRow { flex-wrap: nowrap; }
+  .tut-side .bpick { flex: 1 1 0; width: auto; min-width: 0; }
+  #win .card { max-height: calc(100vh - 150px); overflow-y: auto; }
+  @media (max-width: 760px) {
+    .bpick { flex: 1 1 0; width: auto; min-width: 0; padding: 7px 4px; } .bpick svg { width: 38px; height: 38px; margin-bottom: 2px; }
+    .bpick small { font-size: 10px; } .bpick:not(.cur) small { display: none; }
+    .bpHd { margin: 12px 0 6px; }
+    #win .card { max-height: calc(100vh - 86px); }
+    #win .card { padding: 14px 12px; }
+    .eq { gap: 6px 4px; margin: 10px 0 4px; }
+    .eq .op { font-size: 18px; }
+    .term { width: calc(50% - 16px); padding: 8px 9px; }
+    .term .val { font-size: 20px; margin: 0 0 4px; }
+    .term.total { width: calc(50% - 16px); }
+    .term.total .val { font-size: 26px; }
+  }
   a.winSci { display: inline-block; margin-top: 14px; font-size: 13px; color: var(--muted); text-decoration: none; border-bottom: 1px dotted rgba(242,193,78,0.5); }
   a.winSci:hover { color: var(--accent); }
   #busy { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); z-index: 20; }
@@ -411,6 +438,8 @@
           <li>Start with <b>Beginner</b> puzzles: they need nothing beyond what you just did. Then step up to Easy.</li>
           <li>Curious why there's only ever one solution? Read <a href="science.html" target="_blank" rel="opener">the science behind Rikudo³</a>.</li>
         </ul>
+        <div class="bpHd">Three boards to play: pick one to start</div>
+        <div class="bpRow" id="tutBoards"></div>
         <div class="sp-foot">
           <label class="tog"><input type="checkbox" id="splashAlways" /> Show this at every start</label>
           <button class="primary" id="splashGo">Start playing</button>
@@ -445,6 +474,7 @@
     <button id="winScores">Scoreboard</button>
     <button class="primary" id="winNew">Next puzzle</button>
   </div>
+  <div class="winBoards"><div class="bpHd">Or play the next one on</div><div class="bpRow" id="winBoards"></div></div>
   <div id="winStep"><p>You've got the hang of it. <b>Easy</b> adds one new idea: a number must be within reach of the numbers on either side of it.</p>
     <button id="winEasy">Try an Easy puzzle</button></div>
   <a class="winSci" href="science.html" target="_blank" rel="opener">Why is there only one way? The science behind Rikudo³ →</a>
@@ -1383,6 +1413,7 @@ function onSolved(already) {
       : `${r.name.replace(/</g, '&lt;')}: ${r.stats.total.toLocaleString()} pts total`;
   } else $('winNote').textContent = 'Already solved earlier.';
   $('winStep').style.display = S.level === 'beginner' && beginnerSolves() >= 2 ? 'block' : 'none';
+  $('winBoards').innerHTML = boardPickerHtml(S.spec.type);
   $('win').style.display = 'flex';
   spinning = true;
   save();
@@ -1674,6 +1705,56 @@ $('generate').addEventListener('click', () => {
   closeMenu();
   newPuzzle({ board: { type, size: type === 'cube' ? 54 : +$('size').value, holes }, difficulty: $('difficulty').value });
 });
+// ---------------------------------------------------------------- board picker (icons)
+// Small drawings of the three boards, used on the tutorial's last card and on the win screen.
+const BOARD_ICON = {
+  cube: `<svg viewBox="0 0 64 64" aria-hidden="true">
+    <path d="M32 6 L56 18 L32 30 L8 18 Z" fill="#a8553c"/><path d="M8 18 L32 30 L32 58 L8 46 Z" fill="#3f6aa0"/><path d="M56 18 L32 30 L32 58 L56 46 Z" fill="#b5873a"/>
+    <g stroke="#0d0f14" stroke-width="1.6" fill="none" stroke-linejoin="round">
+      <path d="M32 6 L56 18 L32 30 L8 18 Z M8 18 L32 30 L32 58 L8 46 Z M56 18 L32 30 L32 58 L56 46 Z"/>
+      <path d="M16 14 L40 26 M24 10 L48 22 M16 22 L40 10 M24 26 L48 14"/>
+      <path d="M8 27.3 L32 39.3 M8 36.7 L32 48.7 M16 22 L16 50 M24 26 L24 54"/>
+      <path d="M56 27.3 L32 39.3 M56 36.7 L32 48.7 M48 22 L48 50 M40 26 L40 54"/>
+    </g></svg>`,
+  sphere: `<svg viewBox="0 0 64 64" aria-hidden="true"><defs><clipPath id="bpClip"><circle cx="32" cy="32" r="26"/></clipPath>
+    <radialGradient id="bpShade" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#7fd8e2"/><stop offset="1" stop-color="#245e73"/></radialGradient></defs>
+    <circle cx="32" cy="32" r="26" fill="url(#bpShade)"/>
+    <g clip-path="url(#bpClip)" fill="none" stroke="#0d0f14" stroke-width="1.6" stroke-linejoin="round">
+      <path d="M32 21 L39.5 25.3 L39.5 34 L32 38.3 L24.5 34 L24.5 25.3 Z"/>
+      <path d="M39.5 25.3 L47 21 L54.5 25.3 M39.5 34 L47 38.3 L47 47 M24.5 34 L17 38.3 L17 47 M24.5 25.3 L17 21 L9.5 25.3 M32 21 L32 12.3 L39.5 8 M32 12.3 L24.5 8 M32 38.3 L32 47 L24.5 51.3 M32 47 L39.5 51.3 M47 21 L47 12.3 M17 21 L17 12.3 M47 38.3 L54.5 34 M17 38.3 L9.5 34"/>
+    </g><circle cx="32" cy="32" r="26" fill="none" stroke="#0d0f14" stroke-width="1.6"/></svg>`,
+  pyramid: `<svg viewBox="0 0 64 64" aria-hidden="true">
+    <path d="M30 5 L6 54 L36 59 Z" fill="#8a5bb0"/><path d="M30 5 L36 59 L58 46 Z" fill="#5a8a4a"/>
+    <g fill="none" stroke="#0d0f14" stroke-width="1.6" stroke-linejoin="round">
+      <path d="M30 5 L6 54 L36 59 Z M30 5 L58 46 L36 59"/>
+      <path d="M22 21.3 L32 23 M14 37.7 L34 41 M22 21.3 L26 56.7 M14 37.7 L16 55.3 M32 23 L16 55.3 M34 41 L26 56.7"/>
+      <path d="M39.3 18.7 L32 23 M48.7 32.3 L34 41 M39.3 18.7 L43.3 54.7 M48.7 32.3 L50.7 50.3 M32 23 L50.7 50.3 M34 41 L43.3 54.7"/>
+    </g></svg>`,
+};
+const BOARD_BLURB = { cube: '4 neighbours per cell', sphere: 'hexagons and pentagons', pyramid: 'triangles, 3 neighbours' };
+let bpSeq = 0;
+function boardPickerHtml(current) {
+  const n = ++bpSeq; // unique SVG ids per copy, so two pickers on the page don't share a clip path
+  return ['cube', 'sphere', 'pyramid'].map((t) =>
+    `<button class="bpick${t === current ? ' cur' : ''}" data-board="${t}" title="${BOARD_LABEL[t]}: ${BOARD_BLURB[t]}">` +
+    `${BOARD_ICON[t].replace(/bp(Clip|Shade)/g, `bp$1${n}`)}<b>${BOARD_LABEL[t]}</b><small>${t === current ? 'this board' : BOARD_BLURB[t]}</small></button>`).join('');
+}
+// Play on a board: carry on with an unfinished puzzle there, else the first pack puzzle not yet played at this level.
+function playBoard(type, level) {
+  const db = scoreDb(), me = db.players[db.current];
+  const done = new Set((me?.results || []).map((r) => r.id));
+  const last = store.get('last:' + type, null);
+  if (validSaved(last) && !done.has(last.id) && !(S.puzzle && last.id === S.puzzle.id)) return loadPuzzle(last);
+  const pack = PACKS[type];
+  const order = ['beginner', 'easy', 'medium', 'hard', 'expert'];
+  const from = Math.max(0, order.indexOf(level));
+  for (let li = from; li < order.length; li++) {
+    const p = pack.find((x) => x.difficulty === order[li] && !done.has(x.id));
+    if (p) return loadPuzzle(p);
+  }
+  const bt = C.BOARD_TYPES[type];
+  newPuzzle({ board: { type, size: bt.sizes[Math.min(1, bt.sizes.length - 1)], holes: false }, difficulty: level || 'beginner' });
+}
 function beginnerSolves() {
   const db = scoreDb(), me = db.players[db.current];
   return me ? me.results.filter((r) => r.difficulty === 'beginner' && !r.practice).length : 0;
@@ -1683,6 +1764,16 @@ $('winEasy').addEventListener('click', () => {
   const next = pack.find((x) => x.difficulty === 'easy' && !played.has(x.id)) || pack.find((x) => x.difficulty === 'easy');
   if (next) return loadPuzzle(next);
   newPuzzle({ board: S.spec, difficulty: 'easy' });
+});
+$('winBoards').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.bpick'); if (!b) return;
+  if (b.dataset.board === S.spec.type) return $('winNew').click();
+  playBoard(b.dataset.board, S.level);
+});
+$('tutBoards').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.bpick'); if (!b) return;
+  hideSplash();
+  if (b.dataset.board !== S.spec.type) playBoard(b.dataset.board, 'beginner');
 });
 $('winNew').addEventListener('click', () => {
   const pack = PACKS[S.spec.type];
@@ -2027,6 +2118,7 @@ const Tut = (() => {
     step = STEPS.length; sel = null; render();
     say('', '');
     for (let n = 1; n <= 12; n++) { solvedFx = n; render(); await sleep(70); }
+    $('tutBoards').innerHTML = boardPickerHtml(S.spec ? S.spec.type : 'cube');
     $('tutPlay').style.display = 'none'; $('tutFinal').style.display = 'block';
     $('tutSkip').style.visibility = 'hidden';
     setTimeout(() => $('splashGo').focus({ preventScroll: true }), 30);

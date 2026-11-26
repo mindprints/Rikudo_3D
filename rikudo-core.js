@@ -418,14 +418,22 @@
       try {
         while (st.free > 0) {
           let n = 0, tier = 0;
+          const before = opts.trace ? Array.from(st.v) : null;
+          let placed = null;
           for (let t = 0; t < 4 && !n; t++) {
             const out = tiers[t](st);
-            if (out.length) { n = apply(st, out); tier = t + 1; }
+            if (out.length) { n = apply(st, out); tier = t + 1; placed = out; }
           }
           if (!n) {
             // deep search: reveal one value from the solution (lowest unplaced) and carry on
             let x = 1; while (st.pos[x] >= 0) x++;
-            n = apply(st, [[solution.indexOf(x), x]]); tier = 5;
+            placed = [[solution.indexOf(x), x]];
+            n = apply(st, placed); tier = 5;
+          }
+          // optional step log: the board before this round, and every placement it made
+          if (opts.trace) {
+            const seen = new Set();
+            opts.trace.push({ before, tier, placed: placed.filter(([c, x]) => before[c] !== x && !seen.has(c) && seen.add(c)) });
           }
           counts[tier] += n; score += TIER_W[tier] * n; maxTier = Math.max(maxTier, tier);
           if (opts.stopAbove != null && levelOf(counts, false) > opts.stopAbove) return { over: true, level: levelOf(counts, false) };
@@ -508,8 +516,8 @@
     }
 
     /** Rate an existing puzzle (or a partly solved state). */
-    function ratePuzzle(p, cells) {
-      const r = rate(cells || p.cells, p.chutes, p.solution);
+    function ratePuzzle(p, cells, opts) {
+      const r = rate(cells || p.cells, p.chutes, p.solution, opts);
       return r.error ? r : { score: r.score, counts: r.counts, level: LEVELS[r.level] };
     }
 

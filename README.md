@@ -64,20 +64,24 @@ Every puzzle is graded by a **rating solver** that only uses human-style techniq
 ```
 score   = base × speed × assists
 base    = rating × 10
-speed   = par ÷ your time, kept between 0.3 and 2   (par = 5 s per rating point)
-assists = product of (1 − cost) for every assist used; ×1.1 if rule highlights were off
+own     = 1 − (sum of all assist costs), never below 0     (the share you solved yourself)
+pace    = par ÷ your time, kept between 0.3 and 2           (par = 5 s per rating point)
+speed   = 1 + (pace − 1) × own                              (the bonus counts only for your own share)
+assists = own; ×1.1 if rule highlights were off
 ```
 
 | Assist | Cost | Why |
 |---|---|---|
 | Hint | the share of difficulty it removed, 4–30% | The remaining puzzle is rated before and after the hint. A hint on the key step costs a lot, one on the last cell almost nothing |
-| Check (Shift+Eraser) | 10% + 2% per wrong number, **also when everything is correct** | "You're on track" is real information |
+| Check (C) | 10% + 2% per wrong number, **also when everything is correct** | "You're on track" is real information |
 | Peek (Shift+Hint) | 50% the first time, 15% after that | It shows the whole solution |
 | Rule-conflict highlights | free, or a +10% bonus if they're off before your first move | They only show what the rules already imply |
 
+- **Costs add up:** each hint costs its share of the puzzle's difficulty, at least 4%, so hints that solve the whole puzzle add up to 100% or more and leave 0 points. Light use is almost unchanged from the old multiplied costs (two 4% hints cost 8% either way).
+- **No speed bonus for hinting:** a hint-through is fast, but the speed factor only applies to the share you solved yourself.
 - **Assists stick to the puzzle:** they survive Restart, so you can't peek and then restart for a clean run.
 - **Only first solves score:** only your **first** solve of a puzzle counts towards your total. Replays are recorded as practice, since by then you know the answer.
-- **Win screen:** shows the formula graphically. Base has a bar coloured by the techniques the puzzle needed, Speed has a gauge against par, and Assists lists each assist with its cost.
+- **Win screen:** shows the formula graphically. Base has a bar coloured by the techniques the puzzle needed, Speed has a gauge against par, and Assists shows one chip per kind of assist (hints, checks, peeks) with its count and total cost; hover for each single use.
 - **Storage:** scores are kept per player, in this browser.
 - **Tuning:** `PAR_PER_POINT`, `NET_BONUS` and the speed limits are at the top of the scoring code in `index.html`. Tier weights and level thresholds are in `rikudo-core.js` (`TIER_W`, `levelOf`).
 

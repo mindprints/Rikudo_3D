@@ -1344,15 +1344,21 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 // ---------------------------------------------------------------- scoring
 // score = base × speed × assists
 //   base    = rating × 10       (rating = points for every deduction, weighted by technique)
-//   speed   = par ÷ your time, kept within 0.3–2 (par = 5 s per rating point)
-//   assists = product of (1 − cost) for every hint, check and peek; ×1.1 with rule highlights off
+//   own     = 1 − the sum of all assist costs, never below 0: the share of the puzzle you solved yourself
+//   speed   = 1 + (par ÷ your time − 1) × own; par ÷ time kept within 0.3–2 (par = 5 s per rating point),
+//             so the speed bonus (or penalty) only applies to your own share
+//   assists = own; ×1.1 with rule highlights off
+// Costs add up. Each hint costs its share of the difficulty, at least 4%, so hints that solve the whole puzzle
+// add up to 100% or more and leave nothing to score.
 const PAR_PER_POINT = 5, NET_BONUS = 1.1, SPEED_MIN = 0.3, SPEED_MAX = 2;
 function computeScore(ms) {
   const base = S.rating.score * 10;
   const par = S.rating.score * PAR_PER_POINT;
-  const speed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, par / Math.max(1, ms / 1000)));
-  const assist = S.assists.reduce((f, a) => f * (1 - a.cost), 1) * (S.netUsed ? 1 : NET_BONUS);
-  return { base, par, speed, assist, score: Math.round(base * speed * assist) };
+  const rawSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, par / Math.max(1, ms / 1000)));
+  const own = Math.max(0, 1 - S.assists.reduce((t, a) => t + a.cost, 0));
+  const speed = 1 + (rawSpeed - 1) * own;
+  const assist = own * (S.netUsed ? 1 : NET_BONUS);
+  return { base, par, rawSpeed, own, speed, assist, score: Math.round(base * speed * assist) };
 }
 function scoreDb() { return store.get('scores', { current: 'Player 1', players: { 'Player 1': { results: [] } } }); }
 function playerStats(results) {
@@ -1382,7 +1388,16 @@ function equationHtml(sc) {
   const legend = c.map((n, t) => (t && n ? `<span><i style="background:${TIER_COL[t]}"></i>${TIER_NAMES[t]} ${n}</span>` : '')).join('');
   const span = SPEED_MAX - SPEED_MIN, at = (x) => ((Math.min(SPEED_MAX, Math.max(SPEED_MIN, x)) - SPEED_MIN) / span) * 100;
   const icon = { hint: '💡', check: '✓', peek: '👁' };
-  const chips = S.assists.map((a) => `<span>${icon[a.type] || '•'} ${a.label} −${pct(a.cost)}</span>`).join('') +
+  // one chip per kind of assist: count and combined cost; the single uses are listed in the tooltip
+  const noun = { hint: ['hint', 'hints'], check: ['check', 'checks'], peek: ['peek', 'peeks'] };
+  const chips = ['hint', 'check', 'peek'].map((type) => {
+    const list = S.assists.filter((a) => a.type === type);
+    if (!list.length) return '';
+    const cost = Math.min(1, list.reduce((t, a) => t + a.cost, 0)); // a score can't lose more than all of it
+    const what = list.length === 1 ? list[0].label : `${list.length} ${noun[type][1]}`;
+    const detail = list.map((a) => `${a.label} −${pct(a.cost)}`).join('\n');
+    return `<span title="${detail}">${icon[type]} ${what} −${pct(cost)}</span>`;
+  }).join('') +
     (!S.netUsed ? '<span>🛡 No highlights +10%</span>' : '') + (!S.assists.length && S.netUsed ? '<span>No assists</span>' : '');
   return `
     <div class="term"><div class="lbl">Base</div><div class="val">${sc.base.toLocaleString()}</div>
@@ -1391,7 +1406,8 @@ function equationHtml(sc) {
     <div class="op">×</div>
     <div class="term"><div class="lbl">Speed</div><div class="val">${sc.speed.toFixed(2)}</div>
       <div class="gauge"><s style="left:${at(1)}%"></s><b style="left:${at(sc.speed)}%"></b></div>
-      <div class="tsub">Your time ${fmt(S.elapsed)}<br/>Par ${fmt(sc.par * 1000)} (marker = 1.0)</div></div>
+      <div class="tsub">Your time ${fmt(S.elapsed)}<br/>Par ${fmt(sc.par * 1000)} (marker = 1.0)${sc.own < 1
+        ? `<br/>Pace ${sc.rawSpeed.toFixed(2)}, counted for the ${pct(sc.own)} you solved yourself` : ''}</div></div>
     <div class="op">×</div>
     <div class="term"><div class="lbl">Assists</div><div class="val">${sc.assist.toFixed(2)}</div>
       <div class="bar"><i style="width:${Math.min(100, sc.assist * 100)}%;background:#7fd8a8"></i></div>
@@ -1441,8 +1457,8 @@ function renderScores() {
   $('formula').innerHTML =
     `<b>Score</b> = base × speed × assists.<br/>` +
     `<b>Base</b> = the puzzle's rating × 10. The rating adds up every deduction needed to solve it, weighted by technique: next in line 1, link logic 2, range reasoning 4, trial and error 10, deep search 20.<br/>` +
-    `<b>Speed</b> = par ÷ your time, kept between ${SPEED_MIN} and ${SPEED_MAX}. Par is ${PAR_PER_POINT} s per rating point.<br/>` +
-    `<b>Assists</b> multiply the score down. A hint costs the share of difficulty it removed (4–30%). A check (Shift+Eraser) costs 10% plus 2% per wrong number, even when everything is correct. The first peek costs 50% and later peeks 15%. Assists stay with the puzzle through Restart. Playing with rule highlights off adds 10%.<br/>` +
+    `<b>Assists</b>: every hint, check and peek costs a share, and the costs add up; what's left is the part you solved yourself. A hint costs the share of difficulty it removed (4–30%), so hinting through a whole puzzle leaves nothing. A check costs 10% plus 2% per wrong number, even when everything is correct. The first peek costs 50% and later peeks 15%. Assists stay with the puzzle through Restart. Playing with rule highlights off adds 10%.<br/>` +
+    `<b>Speed</b> = par ÷ your time, kept between ${SPEED_MIN} and ${SPEED_MAX}. Par is ${PAR_PER_POINT} s per rating point. The speed bonus counts only for the part you solved yourself.<br/>` +
     `<b>Total</b> counts only your first solve of each puzzle. Replays are practice, since by then you know the answer. Scores are stored in this browser.`;
   $('resetScores').textContent = "Reset this player's scores";
   $('resetScores').dataset.armed = '';
